@@ -84,7 +84,7 @@ unsigned short checksum(unsigned short *buffer, int len)
 }
 
 // 发送回应请求函数
-void SendEchoRequest(SOCKET s, struct sockaddr_in *lpstToAddr)
+DWORD SendEchoRequest(SOCKET s, struct sockaddr_in *lpstToAddr)
 {
     static ECHOREQUEST echoReq;
     static int nSeq = 1;
@@ -114,7 +114,7 @@ void SendEchoRequest(SOCKET s, struct sockaddr_in *lpstToAddr)
     // {
     //     printf("send successfully!\n");
     // }
-    return;
+    return (echoReq.Time);
 }
 
 // 等待回应答复
@@ -137,6 +137,7 @@ DWORD RecvEchoReply(SOCKET s, LPSOCKADDR_IN lpsaFrom, u_char *pTTL)
     int nAddrLen = sizeof(struct sockaddr_in);
     // 接收应答回复
     nRet = recvfrom(s, (LPSTR)&echoReply, sizeof(ECHOREPLY), 0, (LPSOCKADDR)lpsaFrom, &nAddrLen);
+    echoReply.echoRequest.Time = GetTickCount();
     // 检验接收结果
     if (nRet == SOCKET_ERROR)
     {
@@ -219,7 +220,7 @@ void Ping(char *ptr, bool log)
             i = 0;
         }
         // 发送 ICMP 回应请求
-        SendEchoRequest(rawSocket, &destIP);
+        DWORD sendTime = SendEchoRequest(rawSocket, &destIP);
         // 等待回复的数据
         nRet = WaitForEchoReply(rawSocket);
         // 检测回复有没有错误
@@ -239,7 +240,8 @@ void Ping(char *ptr, bool log)
         // 回复次数加1
         recieved++;
         // 计算花费的时间
-        DWORD timer = GetTickCount() - reciveTime;
+        // printf("sendtime: %d,recievetime: %d",sendTime,reciveTime);
+        DWORD timer = reciveTime - sendTime;
         if (timer < MAXTIME)
         {
             printf("REPLY FROM %s: bytes = %d time = %ldms TTL = %d\n", inet_ntoa(srcIP.sin_addr), REQ_DATASIZE, timer, cTTL);
