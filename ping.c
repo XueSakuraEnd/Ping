@@ -17,25 +17,26 @@
 #pragma comment(lib, "ws2_32.lib")
 
 // icmp数据
-typedef struct ICMPData{
-    DWORD Time; // 时间戳 4 字节
+typedef struct ICMPData
+{
+    DWORD Time;               // 时间戳 4 字节
     char cData[REQ_DATASIZE]; // 具体数据 28 字节
 } ICMPData, *PICMPData;
 
 // 定义 ICMP 回应请求
 typedef struct ECHOREQUEST
 {
-    //IPHDR ipHdr; // ip 头 20 字节
+    // IPHDR ipHdr; // ip 头 20 字节
     ICMPHDR icmpHdr; // 8 字节
-    ICMPData data; // 具体数据 28字节
+    ICMPData data;   // 具体数据 28字节
 } ECHOREQUEST, *PECHOREQUEST;
 
 // 定义 ICMP 回应答复
 typedef struct ECHOREPLY
 {
-    IPHDR ipHdr;  // ip 头 20 字节
-    ICMPHDR icmpHdr;  // 8 字节
-    ICMPData data;    // 具体数据 28 字节
+    IPHDR ipHdr;     // ip 头 20 字节
+    ICMPHDR icmpHdr; // 8 字节
+    ICMPData data;   // 具体数据 28 字节
 } ECHOREPLY, *PECHOREPLY;
 
 // 解析地址
@@ -106,10 +107,14 @@ unsigned short checksum(unsigned short *buffer, int len)
         *(unsigned char *)(&u) = *(unsigned char *)w;
         sum += u;
     }
-    // 第一次反码算数运算
-    sum = (sum >> 16) + (sum & 0xffff);
-    // 第二次反码算数运算
-    sum += (sum >> 16);
+    // // 第一次反码算数运算
+    // sum = (sum >> 16) + (sum & 0xffff);
+    // // 第二次反码算数运算
+    // sum += (sum >> 16);
+    while (sum >> 16)
+    {
+        sum = (sum >> 16) + (sum & 0xffff);
+    }
     // 返回反码
     return (~sum); // 截取低16位
 }
@@ -143,7 +148,7 @@ DWORD SendEchoRequest(SOCKET s, struct sockaddr_in *lpstToAddr, struct sockaddr_
     echoReq.icmpHdr.Checksum = 0;
     echoReq.icmpHdr.ID = getpid();
     echoReq.icmpHdr.Seq = nSeq++;
-    //填充要发送的数据
+    // 填充要发送的数据
     for (nRet = 0; nRet < REQ_DATASIZE; nRet++)
     {
         echoReq.data.cData[nRet] = '1' + nRet;
@@ -197,7 +202,6 @@ DWORD RecvEchoReply(SOCKET s, LPSOCKADDR_IN lpsaFrom, u_char *pTTL)
     return (echoReply.data.Time);
 }
 
-
 // Ping功能实现
 void Ping(char *ptr, bool log)
 {
@@ -223,7 +227,7 @@ void Ping(char *ptr, bool log)
     // 设置目标机地址
     destIP.sin_addr = ResolveHost(ptr); // 设置目标 IP
     destIP.sin_family = AF_INET;        // 地址簇规格
-    destIP.sin_port = 0; // 
+    destIP.sin_port = 0;                //
     // 提示开始进行 PING
     printf("\nPinging %s [%s] with %d bytes of data:\n", ptr, inet_ntoa(destIP.sin_addr), REQ_DATASIZE);
     // 发起多次 PING 测试
@@ -234,7 +238,7 @@ void Ping(char *ptr, bool log)
             i = 0;
         }
         // 发送 ICMP 回应请求
-        DWORD sendTime = SendEchoRequest(rawSocket, &destIP,&srcIP);
+        DWORD sendTime = SendEchoRequest(rawSocket, &destIP, &srcIP);
         // 等待回复的数据
         nRet = WaitForEchoReply(rawSocket);
         // 检测回复有没有错误
@@ -255,7 +259,7 @@ void Ping(char *ptr, bool log)
         // 回复次数加1
         recieved++;
         // 计算花费的时间
-        printf("sendtime: %d,recievetime: %d",sendTime,reciveTime);
+        printf("sendtime: %d,recievetime: %d", sendTime, reciveTime);
         DWORD timer = reciveTime - sendTime;
         if (timer < MAXTIME)
         {
