@@ -51,7 +51,6 @@ struct in_addr ResolveHost(char *ptr)
     memset(&hints, 0, sizeof(hints));
     hints.ai_family = AF_UNSPEC;     // 支持 IPv4 和 IPv6
     hints.ai_socktype = SOCK_STREAM; // TCP
-
     // 解析主机名和服务名
     status = getaddrinfo(ptr, servicename, &hints, &res);
     if (status != 0)
@@ -202,17 +201,56 @@ DWORD RecvEchoReply(SOCKET s, LPSOCKADDR_IN lpsaFrom, u_char *pTTL)
     return (echoReply.data.Time);
 }
 
+void recsen(SOCKET rawSocket, struct sockaddr_in srcIP, struct sockaddr_in destIP)
+{
+
+    // 回复次数,请求失败次数
+    int recieved = 0, lost = 0;
+    // 记录TTL
+    unsigned char cTTL;
+    int nRet;
+    // 发送 ICMP 回应请求
+    DWORD sendTime = SendEchoRequest(rawSocket, &destIP, &srcIP);
+    // 等待回复的数据
+    nRet = WaitForEchoReply(rawSocket);
+    // 检测回复有没有错误
+    if (nRet == SOCKET_ERROR)
+    {
+        printf("select() error:%d\n", WSAGetLastError());
+        return;
+    }
+    if (!nRet)
+    {
+        lost++;
+        printf("Request time out.\n");
+        return;
+    }
+    // 接收回复并记录
+    memset(&srcIP, 0, sizeof(srcIP));
+    DWORD reciveTime = RecvEchoReply(rawSocket, &srcIP, &cTTL);
+    // 回复次数加1
+    recieved++;
+    // 计算花费的时间
+    // printf("sendtime: %d,recievetime: %d", sendTime, reciveTime);
+    DWORD timer = reciveTime - sendTime;
+    if (timer < MAXTIME)
+    {
+        printf("REPLY FROM %s: bytes = %d time = %ldms TTL = %d\n", inet_ntoa(srcIP.sin_addr), REQ_DATASIZE, timer, cTTL);
+    }
+    else
+    {
+        printf("Request time out.\n");
+    }
+    Sleep(1000);
+}
+
 // Ping功能实现
 void Ping(char *ptr, bool log)
 {
-    // 回复次数,请求失败次数
-    int recieved = 0, lost = 0;
+
     struct sockaddr_in srcIP;  // 回复地址
     struct sockaddr_in destIP; // 目标地址
-    // 记录TTL
-    unsigned char cTTL;
-    // 记录
-    int nRet;
+
     // 创建原始套接字 ,ICMP 类型
     SOCKET rawSocket = socket(AF_INET, SOCK_RAW, IPPROTO_ICMP);
     if (rawSocket == SOCKET_ERROR)
@@ -230,52 +268,17 @@ void Ping(char *ptr, bool log)
     destIP.sin_port = 0;                //
     // 提示开始进行 PING
     printf("\nPinging %s [%s] with %d bytes of data:\n", ptr, inet_ntoa(destIP.sin_addr), REQ_DATASIZE);
-    // 发起多次 PING 测试
-    for (int i = 0; i < 4; i++)
+    if (log)
     {
-        if (log)
-        {
-            i = 0;
-        }
-        // 发送 ICMP 回应请求
-        DWORD sendTime = SendEchoRequest(rawSocket, &destIP, &srcIP);
-        // 等待回复的数据
-        nRet = WaitForEchoReply(rawSocket);
-        // 检测回复有没有错误
-        if (nRet == SOCKET_ERROR)
-        {
-            printf("select() error:%d\n", WSAGetLastError());
-            break;
-        }
-        if (!nRet)
-        {
-            lost++;
-            printf("Request time out.\n");
-            continue;
-        }
-        // 接收回复并记录
-        memset(&srcIP, 0, sizeof(srcIP));
-        DWORD reciveTime = RecvEchoReply(rawSocket, &srcIP, &cTTL);
-        // 回复次数加1
-        recieved++;
-        // 计算花费的时间
-        printf("sendtime: %d,recievetime: %d", sendTime, reciveTime);
-        DWORD timer = reciveTime - sendTime;
-        if (timer < MAXTIME)
-        {
-            printf("REPLY FROM %s: bytes = %d time = %ldms TTL = %d\n", inet_ntoa(srcIP.sin_addr), REQ_DATASIZE, timer, cTTL);
-        }
-        else
-        {
-            printf("Request time out.\n");
-        }
-        Sleep(1000);
+        recsen(rawSocket, srcIP, destIP);
     }
-    // 关闭socket套件
-    nRet = closesocket(rawSocket);
-    if (nRet == SOCKET_ERROR)
+    else
     {
-        printf("closesocket() error:%d\n", WSAGetLastError());
+        // 发起多次 PING 测试
+        for (int i = 0; i < 4; i++)
+        {
+            recsen(rawSocket, srcIP, destIP);
+        }
     }
 }
 
@@ -311,7 +314,7 @@ int main()
     ptr[strlen(ptr) - 1] = '\0';
     // 开始ping
     Ping(ptr, log);
-
+    system("pause");
     // 清除Winsock库
     WSACleanup();
 
